@@ -565,27 +565,6 @@ def main():
         result = route_message(to, message, msg_type, topic)
         print_route(result)
     
-    elif cmd == "broadcast":
-        topic = "general"
-        message = None
-        i = 2
-        while i < len(sys.argv):
-            if sys.argv[i] == "--topic" and i + 1 < len(sys.argv):
-                topic = sys.argv[i + 1]
-                i += 2
-            elif sys.argv[i] == "--message" and i + 1 < len(sys.argv):
-                message = sys.argv[i + 1]
-                i += 2
-            else:
-                i += 1
-        
-        if not message:
-            print("Usage: rmesh.py broadcast --topic <topic> --message <text>")
-            sys.exit(1)
-        
-        result = route_message(topic, message, "broadcast", topic)
-        print_route(result)
-    
     elif cmd == "inbox":
         wallet = sys.argv[2] if len(sys.argv) > 2 else None
         limit = 5
@@ -632,10 +611,197 @@ def main():
         else:
             print(f"  Net Protocol: ❌")
     
+    elif cmd == "dm":
+        # Parse args
+        from_key = None
+        to = None
+        message = None
+        i = 2
+        while i < len(sys.argv):
+            if sys.argv[i] == "--from-key" and i + 1 < len(sys.argv):
+                from_key = sys.argv[i + 1]
+                i += 2
+            elif sys.argv[i] == "--to" and i + 1 < len(sys.argv):
+                to = sys.argv[i + 1]
+                i += 2
+            elif sys.argv[i] == "--message" and i + 1 < len(sys.argv):
+                message = sys.argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        
+        if not from_key or not to or not message:
+            print("Usage: rmesh.py dm --from-key <key> --to <addr> --message <text>")
+            sys.exit(1)
+        
+        if not to.startswith("0x"):
+            print(f"❌ --to must be a full 0x address")
+            print("  Use: rmesh.py resolve <handle> first")
+            sys.exit(1)
+        
+        result = send_dm(from_key, to, message)
+        if result.get("ok"):
+            print(f"✅ DM sent via Signa")
+            print(f"  From: {result['from']}")
+            print(f"  To: {result['to']}")
+            print(f"  Message: {result['message']}")
+            if result.get("dm_id"):
+                print(f"  ID: {result['dm_id']}")
+        else:
+            print(f"❌ DM failed: {result.get('error')}")
+    
+    elif cmd == "broadcast":
+        from_key = None
+        topic = "general"
+        message = None
+        i = 2
+        while i < len(sys.argv):
+            if sys.argv[i] == "--from-key" and i + 1 < len(sys.argv):
+                from_key = sys.argv[i + 1]
+                i += 2
+            elif sys.argv[i] == "--topic" and i + 1 < len(sys.argv):
+                topic = sys.argv[i + 1]
+                i += 2
+            elif sys.argv[i] == "--message" and i + 1 < len(sys.argv):
+                message = sys.argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        
+        if not from_key or not message:
+            print("Usage: rmesh.py broadcast --from-key <key> --topic <topic> --message <text>")
+            sys.exit(1)
+        
+        result = broadcast_net(from_key, topic, message)
+        if result.get("ok"):
+            print(f"✅ Broadcast via Net Protocol")
+            print(f"  Topic: {result['topic']}")
+            print(f"  Message: {result['message']}")
+            if result.get("tx_hash"):
+                print(f"  TX: {result['tx_hash']}")
+            if result.get("explorer"):
+                print(f"  Explorer: {result['explorer']}")
+        else:
+            print(f"❌ Broadcast failed: {result.get('error')}")
+    
     else:
         print(f"Unknown command: {cmd}")
         print(__doc__)
         sys.exit(1)
+
+
+def send_dm(private_key: str, to_addr: str, message: str) -> Dict[str, Any]:
+    """Send a DM via Signa"""
+    import subprocess
+    
+    # Get sender address
+    try:
+        result = subprocess.run(
+            ["cast", "wallet", "address", "--private-key", private_key],
+            capture_output=True, text=True, timeout=10
+        )
+        from_addr = result.stdout.strip() if result.returncode == 0 else None
+    except:
+        from_addr = None
+    
+    if not from_addr:
+        return {"ok": False, "error": "Could not derive address from private key"}
+    
+    # Build canonical envelope (MILLISECONDS!)
+    ts = int(time.time() * 1000)
+    preimage = f"SIGNA agent dm v1\nts:{ts}\nfrom:{from_addr.lower()}\nto:{to_addr.lower()}\nbody:{message}"
+    
+    # Sign
+    try:
+        result = subprocess.run(
+            ["cast", "wallet", "sign", "--private-key", private_key, preimage],
+            capture_output=True, text=True, timeout=10
+        )
+        signature = result.stdout.strip() if result.returncode == 0 else None
+    except:
+        signature = None
+    
+    if not signature:
+        return {"ok": False, "error": "Could not sign message"}
+    
+    # Send DM
+    payload = json.dumps({
+        "from": from_addr.lower(),
+        "to": to_addr.lower(),
+        "body": message,
+        "ts": ts,
+        "signature": signature
+    }).encode()
+    
+    try:
+        url = f"{SIGNA_BASE}/api/agents/{from_addr}/dm"
+        req = urllib.request.Request(url, data=payload, headers={
+            "Content-Type": "application/json",
+            "User-Agent": "RMESH/0.1"
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read())
+            return {
+                "ok": result.get("ok", False),
+                "channel": "signa_dm",
+                "from": from_addr,
+                "to": to_addr,
+                "message": message[:50],
+                "ts": ts,
+                "dm_id": result.get("dm", {}).get("id"),
+                "thread_id": result.get("thread_id")
+            }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def broadcast_net(private_key: str, topic: str, message: str) -> Dict[str, Any]:
+    """Broadcast via Net Protocol"""
+    import subprocess
+    
+    # Encode calldata
+    try:
+        result = subprocess.run(
+            ["cast", "calldata", "sendMessage(string,string,bytes)", message, topic, "0x"],
+            capture_output=True, text=True, timeout=10
+        )
+        calldata = result.stdout.strip() if result.returncode == 0 else None
+    except:
+        calldata = None
+    
+    if not calldata:
+        return {"ok": False, "error": "Could not encode calldata"}
+    
+    # Send transaction
+    try:
+        result = subprocess.run(
+            ["cast", "send", NET_CONTRACT, calldata, 
+             "--rpc-url", BASE_RPC, "--private-key", private_key],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            tx_hash = None
+            for line in result.stdout.split("\n"):
+                line = line.strip()
+                if line.startswith("transactionHash"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        tx_hash = parts[1]
+                        break
+            
+            return {
+                "ok": True,
+                "channel": "net_protocol",
+                "topic": topic,
+                "message": message[:50],
+                "contract": NET_CONTRACT,
+                "tx_hash": tx_hash,
+                "explorer": f"https://basescan.org/tx/{tx_hash}" if tx_hash else None
+            }
+        else:
+            return {"ok": False, "error": result.stderr or result.stdout}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 if __name__ == "__main__":
