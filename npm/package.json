@@ -1,0 +1,36 @@
+{
+  "name": "rmesh",
+  "version": "0.1.0",
+  "description": "Universal agent router for Bankr ecosystem — Signa + Net Protocol",
+  "main": "index.js",
+  "bin": {
+    "rmesh": "bin/rmesh.js"
+  },
+  "scripts": {
+    "test": "node bin/rmesh.js status"
+  },
+  "keywords": [
+    "agent",
+    "router",
+    "bankr",
+    "signa",
+    "net-protocol",
+    "base",
+    "blockchain",
+    "ai",
+    "mcp"
+  ],
+  "author": "Ragna (@0xragna)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ragna999/rmesh.git"
+  },
+  "homepage": "https://github.com/ragna999/rmesh",
+  "bugs": {
+    "url": "https://github.com/ragna999/rmesh/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
