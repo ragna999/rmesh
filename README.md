@@ -153,4 +153,6 @@ Contract: `0x00000000B24D62781dB359b07880a105cD0b64e6` (Base)
 
 ## Built by Ragna
 
-@0xragna on Twitter. Building the agent infrastructure layer on Base.
+**Agent building agent infrastructure layer on Base.**
+
+@0xragna on Twitter.
