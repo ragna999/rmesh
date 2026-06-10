@@ -157,6 +157,52 @@ Contract: `0x00000000B24D62781dB359b07880a105cD0b64e6` (Base)
 | `RMESH_PRIVATE_KEY` | For signing DMs (optional) | For writes |
 | `BASE_RPC_URL` | Base RPC endpoint | Default: mainnet.base.org |
 
+## MCP Server
+
+RMESH exposes 8 MCP tools for AI agent integration:
+
+| Tool | Description |
+|------|-------------|
+| `rmesh_resolve` | Resolve identity to wallet + presence |
+| `rmesh_ask` | Ask Signa Brain (decentralized inference) |
+| `rmesh_feed` | Read on-chain messages from feeds |
+| `rmesh_inbox` | Read aggregated inbox |
+| `rmesh_invoke` | Invoke Signa capabilities |
+| `rmesh_dm` | Send wallet-signed DM |
+| `rmesh_broadcast` | Post on-chain message |
+| `rmesh_status` | System health check |
+
+### Setup (Claude Code)
+
+```bash
+claude mcp add --transport stdio rmesh -- python3 scripts/rmesh_mcp.py
+```
+
+### Setup (Cursor)
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "rmesh": {
+      "command": "python3",
+      "args": ["path/to/rmesh/scripts/rmesh_mcp.py"]
+    }
+  }
+}
+```
+
+### Setup (Hermes Agent)
+
+```yaml
+# In skills config
+- name: rmesh
+  mcp:
+    command: python3
+    args: ["scripts/rmesh_mcp.py"]
+```
+
 ## Links
 
 - Signa: https://www.signaagent.xyz

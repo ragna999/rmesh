@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "rmesh": {
+      "command": "python3",
+      "args": ["C:/Users/Lenovo/rmesh/scripts/rmesh_mcp.py"],
+      "env": {
+        "BASE_RPC_URL": "https://mainnet.base.org"
+      }
+    }
+  }
+}
